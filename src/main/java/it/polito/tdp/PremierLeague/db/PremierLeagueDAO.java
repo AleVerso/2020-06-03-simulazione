@@ -6,15 +6,16 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import it.polito.tdp.PremierLeague.model.Action;
+import it.polito.tdp.PremierLeague.model.Adiacenza;
 import it.polito.tdp.PremierLeague.model.Player;
 
 public class PremierLeagueDAO {
 	
-	public List<Player> listAllPlayers(){
+	public void listAllPlayers(Map<Integer, Player> idMap){
 		String sql = "SELECT * FROM Players";
-		List<Player> result = new ArrayList<Player>();
 		Connection conn = DBConnect.getConnection();
 
 		try {
@@ -22,16 +23,17 @@ public class PremierLeagueDAO {
 			ResultSet res = st.executeQuery();
 			while (res.next()) {
 
-				Player player = new Player(res.getInt("PlayerID"), res.getString("Name"));
+				if(!idMap.containsKey(res.getInt("PlayerID"))) {
+					Player player = new Player(res.getInt("PlayerID"), res.getString("Name"));
+					idMap.put(res.getInt("PlayerID"), player);
+				}
 				
-				result.add(player);
 			}
 			conn.close();
-			return result;
 			
 		} catch (SQLException e) {
 			e.printStackTrace();
-			return null;
+			return;
 		}
 	}
 	
@@ -59,4 +61,68 @@ public class PremierLeagueDAO {
 			return null;
 		}
 	}
+	
+	public List<Player> getVertices(double goal, Map<Integer, Player> idMap){
+		String sql = "SELECT P.PlayerID AS id "
+				+ "FROM Players P, Actions A "
+				+ "WHERE A.PlayerID = P.PlayerID "
+				+ "GROUP BY P.PlayerID, P.Name "
+				+ "HAVING AVG(A.Goals) > ?";
+		Connection conn = DBConnect.getConnection();
+		List<Player> result = new ArrayList<>();
+
+		try {
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setDouble(1, goal);
+			ResultSet res = st.executeQuery();
+			while (res.next()) {
+
+				if(idMap.containsKey(res.getInt("id"))) {
+					result.add(idMap.get(res.getInt("id")));
+				}
+				
+			}
+			conn.close();
+			return result;
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return result;
+		}
+	}
+	
+	public List<Adiacenza> getArchi(Map<Integer, Player> idMap){
+		String sql = "SELECT A1.PlayerID AS p1, A2.PlayerID AS p2, (SUM(A1.TimePlayed) - SUM(A2.TimePlayed)) AS peso "
+				+ "	FROM 	Actions A1, Actions A2 "
+				+ "	WHERE A1.TeamID != A2.TeamID "
+				+ "	AND A1.MatchID = A2.MatchID "
+				+ "	AND A1.starts = 1 AND A2.starts = 1 "
+				+ "	AND A1.PlayerID > A2.PlayerID "
+				+ "	GROUP BY A1.PlayerID,A2.PlayerID";
+		Connection conn = DBConnect.getConnection();
+		List<Adiacenza> result = new ArrayList<>();
+
+		try {
+			PreparedStatement st = conn.prepareStatement(sql);
+			ResultSet res = st.executeQuery();
+			while (res.next()) {
+
+				if(idMap.containsKey(res.getInt("p1")) && idMap.containsKey(res.getInt("p2"))) {
+					Adiacenza a = new Adiacenza (idMap.get(res.getInt("p1")), idMap.get(res.getInt("p2")), res.getDouble("peso"));
+					result.add(a);
+				}
+				
+			}
+			conn.close();
+			return result;
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return result;
+		}
+		
+		
+	}
+	
+	
 }
